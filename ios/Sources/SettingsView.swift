@@ -60,6 +60,8 @@ struct SettingsView: View {
                 Section {
                     Toggle("Show toolbar", isOn: $model.settings.showToolbar)
                     Toggle("Toolbar on the left", isOn: $model.settings.toolbarOnLeft)
+                    ComboField(title: "Flip horizontal", combo: $model.settings.flipHorizontal)
+                    ComboField(title: "Flip vertical", combo: $model.settings.flipVertical)
                     ForEach($model.settings.buttons) { $button in
                         HStack {
                             TextField("Label", text: $button.label).frame(maxWidth: 110)
@@ -78,7 +80,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Toolbar")
                 } footer: {
-                    Text("Keys look like ctrl+shift+z, alt, space, f5, [ or ]. Hold keeps them pressed while your finger is down.")
+                    Text("Keys look like ctrl+shift+z, alt, space, f5, [ or ]. Hold keeps them pressed while your finger is down. Drawing apps have no standard flip shortcut, so give the flip keys to Flip Horizontal/Vertical in your app (Clip Studio: File → Shortcut Settings; Photoshop: Edit → Keyboard Shortcuts; Krita: M is horizontal mirror). Leave one empty to hide its button.")
                 }
             }
             .navigationTitle("InkLink")

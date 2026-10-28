@@ -13,12 +13,12 @@ final class Toolbar: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterialDark))
-        blur.layer.cornerRadius = 14
+        blur.layer.cornerRadius = 11
         blur.clipsToBounds = true
         blur.translatesAutoresizingMaskIntoConstraints = false
         addSubview(blur)
         stack.axis = .vertical
-        stack.spacing = 4
+        stack.spacing = 3
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         NSLayoutConstraint.activate([
@@ -26,19 +26,20 @@ final class Toolbar: UIView {
             blur.trailingAnchor.constraint(equalTo: trailingAnchor),
             blur.topAnchor.constraint(equalTo: topAnchor),
             blur.bottomAnchor.constraint(equalTo: bottomAnchor),
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 6),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: 4),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
         ])
-        eraserButton.setImage(UIImage(systemName: "eraser"), for: .normal)
+        eraserButton.setImage(UIImage(systemName: "eraser", withConfiguration: UIImage.SymbolConfiguration(pointSize: 15)), for: .normal)
         style(eraserButton)
         eraserButton.addAction(UIAction { [weak self] _ in self?.onEraser() }, for: .touchUpInside)
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
-    func reload(_ buttons: [ToolbarButton]) {
+    /// Flip buttons only appear when a shortcut is set for them.
+    func reload(_ buttons: [ToolbarButton], flipHorizontal: String, flipVertical: String) {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         actions = [:]
 
@@ -48,10 +49,19 @@ final class Toolbar: UIView {
 
         stack.addArrangedSubview(eraserButton)
 
+        for (symbol, combo) in [
+            ("arrow.left.and.right.righttriangle.left.righttriangle.right", flipHorizontal),
+            ("arrow.up.and.down.righttriangle.up.righttriangle.down", flipVertical),
+        ] where !combo.isEmpty {
+            let flip = iconButton(symbol)
+            flip.addAction(UIAction { [weak self] _ in self?.onKey(.tap, combo) }, for: .touchUpInside)
+            stack.addArrangedSubview(flip)
+        }
+
         for b in buttons where !b.combo.isEmpty {
             let button = UIButton(type: .system)
             button.setTitle(b.label, for: .normal)
-            button.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+            button.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
             button.titleLabel?.adjustsFontSizeToFitWidth = true
             style(button)
             actions[button] = b
@@ -71,7 +81,7 @@ final class Toolbar: UIView {
 
     private func iconButton(_ symbol: String) -> UIButton {
         let b = UIButton(type: .system)
-        b.setImage(UIImage(systemName: symbol), for: .normal)
+        b.setImage(UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 15)), for: .normal)
         style(b)
         return b
     }
@@ -80,10 +90,10 @@ final class Toolbar: UIView {
         b.tintColor = .white
         b.setTitleColor(.white, for: .normal)
         b.backgroundColor = UIColor.white.withAlphaComponent(0.08)
-        b.layer.cornerRadius = 10
+        b.layer.cornerRadius = 8
         b.translatesAutoresizingMaskIntoConstraints = false
-        b.widthAnchor.constraint(equalToConstant: 56).isActive = true
-        b.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        b.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        b.heightAnchor.constraint(equalToConstant: 34).isActive = true
     }
 
     @objc private func press(_ b: UIButton) {

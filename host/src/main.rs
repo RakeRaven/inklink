@@ -71,6 +71,12 @@ fn run() -> Result<()> {
 
 /// USB first (lower latency), then Wi-Fi.
 fn connect(fixed: Option<SocketAddr>, bonjour: &net::Bonjour) -> Option<(String, net::Stream)> {
+    // A fixed --host means exactly that address.
+    if let Some(a) = fixed {
+        return net::connect_tcp(a)
+            .ok()
+            .map(|s| (format!("Wi-Fi ({a})"), s));
+    }
     if let Ok(devices) = net::usb_devices() {
         for d in devices {
             match net::usb_connect(d) {
@@ -79,14 +85,8 @@ fn connect(fixed: Option<SocketAddr>, bonjour: &net::Bonjour) -> Option<(String,
             }
         }
     }
-    let addrs = match fixed {
-        Some(a) => vec![a],
-        None => {
-            let mut a = bonjour.addresses();
-            a.extend(last_ipad().filter(|l| !a.contains(l)));
-            a
-        }
-    };
+    let mut addrs = bonjour.addresses();
+    addrs.extend(last_ipad().filter(|l| !addrs.contains(l)));
     for a in addrs {
         match net::connect_tcp(a) {
             Ok(s) => {

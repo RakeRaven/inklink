@@ -16,6 +16,7 @@ final class HostLink {
     private let queue = DispatchQueue(label: "inklink.net", qos: .userInteractive)
     private var listener: NWListener?
     private var connection: NWConnection?
+    private var lastReceived = Date.distantPast
     private var bonjour: NetService?
 
     func start() {
@@ -48,8 +49,14 @@ final class HostLink {
     }
 
     private func accept(_ c: NWConnection) {
+        // A live host keeps the iPad; a second one only takes over once the first goes quiet.
+        if connection != nil, Date().timeIntervalSince(lastReceived) < 2 {
+            c.cancel()
+            return
+        }
         connection?.cancel()
         connection = c
+        lastReceived = Date()
         let via: String
         if case .hostPort(let host, _) = c.endpoint, "\(host)".hasPrefix("127.") || "\(host)" == "::1" {
             via = "USB"
@@ -93,6 +100,7 @@ final class HostLink {
     }
 
     private func handle(_ kind: UInt8, _ payload: Data) {
+        lastReceived = Date()
         switch kind {
         case Wire.video:
             onVideo?(payload)

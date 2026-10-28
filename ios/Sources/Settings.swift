@@ -42,6 +42,8 @@ struct Settings: Codable, Equatable {
     var squeeze: PencilAction = .toolbar
     var twoFingerTap = "ctrl+z"
     var threeFingerTap = "ctrl+shift+z"
+    var flipHorizontal = "ctrl+alt+shift+h"
+    var flipVertical = "ctrl+alt+shift+v"
     var showToolbar = true
     var toolbarOnLeft = true
     var buttons: [ToolbarButton] = [
@@ -77,6 +79,8 @@ struct Settings: Codable, Equatable {
         squeeze = get(.squeeze, d.squeeze)
         twoFingerTap = get(.twoFingerTap, d.twoFingerTap)
         threeFingerTap = get(.threeFingerTap, d.threeFingerTap)
+        flipHorizontal = get(.flipHorizontal, d.flipHorizontal)
+        flipVertical = get(.flipVertical, d.flipVertical)
         showToolbar = get(.showToolbar, d.showToolbar)
         toolbarOnLeft = get(.toolbarOnLeft, d.toolbarOnLeft)
         buttons = get(.buttons, d.buttons)

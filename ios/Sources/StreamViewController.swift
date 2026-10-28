@@ -138,7 +138,7 @@ final class StreamViewController: UIViewController {
 
     private func applySettings(_ s: Settings) {
         streamView.settings = s
-        toolbar.reload(s.buttons)
+        toolbar.reload(s.buttons, flipHorizontal: s.flipHorizontal, flipVertical: s.flipVertical)
         toolbar.isHidden = !s.showToolbar
         NSLayoutConstraint.deactivate(toolbarSide)
         let guide = view.safeAreaLayoutGuide
