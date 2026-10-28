@@ -8,6 +8,7 @@ use ashpd::desktop::screencast::{
     StartCastOptions,
 };
 use ashpd::desktop::{PersistMode, Session};
+use ashpd::enumflags2::BitFlags;
 use evdev::uinput::VirtualDevice;
 use evdev::{
     AbsInfo, AbsoluteAxisCode, AttributeSet, EventType, InputEvent, KeyCode, PropType,
@@ -59,7 +60,7 @@ impl Display {
                     &session,
                     SelectSourcesOptions::default()
                         .set_cursor_mode(CursorMode::Embedded)
-                        .set_sources(SourceType::Monitor)
+                        .set_sources(BitFlags::from(SourceType::Monitor))
                         .set_multiple(false)
                         .set_persist_mode(PersistMode::ExplicitlyRevoked)
                         .set_restore_token(token.as_deref()),

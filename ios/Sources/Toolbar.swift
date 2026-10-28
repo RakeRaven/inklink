@@ -31,6 +31,9 @@ final class Toolbar: UIView {
             stack.topAnchor.constraint(equalTo: topAnchor, constant: 6),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
         ])
+        eraserButton.setImage(UIImage(systemName: "eraser"), for: .normal)
+        style(eraserButton)
+        eraserButton.addAction(UIAction { [weak self] _ in self?.onEraser() }, for: .touchUpInside)
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -43,10 +46,6 @@ final class Toolbar: UIView {
         gear.addAction(UIAction { [weak self] _ in self?.onSettings() }, for: .touchUpInside)
         stack.addArrangedSubview(gear)
 
-        eraserButton.setImage(UIImage(systemName: "eraser"), for: .normal)
-        style(eraserButton)
-        eraserButton.removeTarget(nil, action: nil, for: .allEvents)
-        eraserButton.addAction(UIAction { [weak self] _ in self?.onEraser() }, for: .touchUpInside)
         stack.addArrangedSubview(eraserButton)
 
         for b in buttons where !b.combo.isEmpty {

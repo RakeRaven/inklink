@@ -23,7 +23,9 @@ final class StreamView: UIView, UIPencilInteractionDelegate {
         backgroundColor = .black
         isMultipleTouchEnabled = true
         addGestureRecognizer(UIHoverGestureRecognizer(target: self, action: #selector(hover(_:))))
-        addInteraction(UIPencilInteraction(delegate: self))
+        let pencil = UIPencilInteraction()
+        pencil.delegate = self
+        addInteraction(pencil)
         fingers.forward = { [weak self] samples in
             for chunk in stride(from: 0, to: samples.count, by: 32) {
                 self?.send(Message.touch(samples[chunk..<min(chunk + 32, samples.count)]))
