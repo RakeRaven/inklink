@@ -91,6 +91,7 @@ final class StreamView: UIView, UIPencilInteractionDelegate {
         }
         if !direct.isEmpty {
             fingers.passThrough = settings.fingersToHost
+            fingers.oneFingerDrags = settings.oneFingerDrags
             let reject = settings.palmRejection
             let busy = pencilBusy
             fingers.began(direct, in: self, reject: { reject && (busy || Self.isPalm($0)) }, normalize: normalize)

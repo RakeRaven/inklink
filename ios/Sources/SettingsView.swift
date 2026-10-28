@@ -40,13 +40,14 @@ struct SettingsView: View {
 
                 Section {
                     Toggle("Send fingers to computer", isOn: $model.settings.fingersToHost)
+                    Toggle("One-finger drags too", isOn: $model.settings.oneFingerDrags)
                     Toggle("Ignore palm while drawing", isOn: $model.settings.palmRejection)
                     ComboField(title: "Two-finger tap", combo: $model.settings.twoFingerTap)
                     ComboField(title: "Three-finger tap", combo: $model.settings.threeFingerTap)
                 } header: {
                     Text("Touch")
                 } footer: {
-                    Text("Fingers arrive as a touchscreen, so pinch, rotate and pan the canvas the way your app does on a touch PC.")
+                    Text("Two or more fingers arrive as a touchscreen, so pinch, rotate and pan work the way your app does on a touch PC. One-finger taps click; one-finger drags are held back so they can't draw unless you turn them on.")
                 }
 
                 Section {
