@@ -1,0 +1,37 @@
+name: iPad app
+
+on:
+  push:
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build
+        run: |
+          xcodebuild -project InkLink.xcodeproj -scheme InkLink -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/InkLink.app Payload/
+          zip -qry InkLink.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: InkLink-ipa
+          path: ios/InkLink.ipa

@@ -1,0 +1,34 @@
+[package]
+name = "inklink-host"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+anyhow = "1.0.104"
+env_logger = "0.11.11"
+gstreamer = "0.25.4"
+gstreamer-app = "0.25.2"
+gstreamer-video = "0.25.4"
+log = "0.4.34"
+mdns-sd = "0.21.6"
+plist = "1.10.3"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_Controls",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Input_Pointer",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+ashpd = { version = "0.13.13", default-features = false, features = ["tokio", "screencast"] }
+evdev = "0.13.2"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+
+[profile.release]
+lto = "thin"

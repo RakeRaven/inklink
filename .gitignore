@@ -1,0 +1,7 @@
+host/target/
+ios/*.xcodeproj
+ios/build/
+ios/Payload/
+ios/Support/Info.plist
+*.ipa
+.DS_Store
