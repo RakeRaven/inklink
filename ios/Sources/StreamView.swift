@@ -71,9 +71,9 @@ final class StreamView: UIView, UIPencilInteractionDelegate {
         pen != nil || hovering || Date().timeIntervalSince(lastPencil) < 1.0
     }
 
-    /// Fingertips report a radius around 10 pt; a resting palm or hand edge is far larger.
+    /// Fingertips report radii of about 20-42 pt (in steps); a resting palm or hand edge is larger.
     private static func isPalm(_ t: UITouch) -> Bool {
-        t.majorRadius > 30
+        t.majorRadius > 50
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
