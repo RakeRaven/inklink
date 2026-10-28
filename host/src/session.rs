@@ -92,9 +92,20 @@ pub fn run(stream: Stream, display: &Display, injector: &mut Injector) -> Result
                     c.force_keyframe();
                 }
             }
-            Ok(ClientMsg::Pen(events)) => events.iter().for_each(|e| injector.pen(e)),
-            Ok(ClientMsg::Touch(points)) => injector.touch(&points),
-            Ok(ClientMsg::Key { action, combo }) => injector.key(action, &parse_combo(&combo)),
+            Ok(ClientMsg::Pen(events)) => {
+                if let Some(e) = events.first() {
+                    log::debug!("pen {:?} x{} at {:.3},{:.3} p{:.2}", e.phase, events.len(), e.x, e.y, e.pressure);
+                }
+                events.iter().for_each(|e| injector.pen(e))
+            }
+            Ok(ClientMsg::Touch(points)) => {
+                log::debug!("touch {:?}", points.iter().map(|p| (p.id, p.phase)).collect::<Vec<_>>());
+                injector.touch(&points)
+            }
+            Ok(ClientMsg::Key { action, combo }) => {
+                log::debug!("key {action:?} {combo}");
+                injector.key(action, &parse_combo(&combo))
+            }
             Ok(ClientMsg::Hello { .. } | ClientMsg::Unknown) => {}
             Err(e) => log::warn!("bad message {kind:#x}: {e}"),
         }

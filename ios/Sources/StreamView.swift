@@ -22,7 +22,9 @@ final class StreamView: UIView, UIPencilInteractionDelegate {
         super.init(frame: frame)
         backgroundColor = .black
         isMultipleTouchEnabled = true
-        addGestureRecognizer(UIHoverGestureRecognizer(target: self, action: #selector(hover(_:))))
+        let hover = UIHoverGestureRecognizer(target: self, action: #selector(hover(_:)))
+        hover.cancelsTouchesInView = false
+        addGestureRecognizer(hover)
         let pencil = UIPencilInteraction()
         pencil.delegate = self
         addInteraction(pencil)

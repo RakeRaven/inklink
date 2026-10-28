@@ -205,6 +205,8 @@ impl Injector {
                 pointerId: 0,
                 pointerFlags: flags,
                 ptPixelLocation: self.to_screen(e.x, e.y),
+                ptPixelLocationRaw: self.to_screen(e.x, e.y),
+                historyCount: 1,
                 ButtonChangeType: change,
                 ..Default::default()
             },
@@ -277,6 +279,8 @@ impl Injector {
                         pointerId: c.id % 256,
                         pointerFlags: flags,
                         ptPixelLocation: c.point,
+                        ptPixelLocationRaw: c.point,
+                        historyCount: 1,
                         ..Default::default()
                     },
                     touchFlags: TOUCH_FLAG_NONE,
