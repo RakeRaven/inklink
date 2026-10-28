@@ -189,30 +189,37 @@ impl Bonjour {
     pub fn start() -> Bonjour {
         let found = Arc::new(Mutex::new(HashMap::new()));
         let daemon = mdns_sd::ServiceDaemon::new()
-            .and_then(|d| d.browse(SERVICE).map(|rx| (d, rx)))
             .map_err(|e| log::warn!("Bonjour unavailable: {e}"))
             .ok();
-        let daemon = daemon.map(|(daemon, rx)| {
+        if let Some(daemon) = daemon.clone() {
             let found = found.clone();
             std::thread::spawn(move || {
-                while let Ok(event) = rx.recv() {
-                    match event {
-                        mdns_sd::ServiceEvent::ServiceResolved(info) => {
-                            if let Some(ip) = info.get_addresses_v4().into_iter().next() {
-                                let addr = SocketAddr::from((ip, info.get_port()));
-                                log::info!("found {} at {addr}", info.fullname);
-                                found.lock().unwrap().insert(info.fullname.clone(), addr);
+                // Re-browse regularly: a sleeping iPad drops off and only answers fresh queries.
+                // Addresses are kept after the iPad goes away so a woken iPad is retried right away.
+                loop {
+                    let Ok(rx) = daemon.browse(SERVICE) else {
+                        return;
+                    };
+                    let until = std::time::Instant::now() + Duration::from_secs(10);
+                    while let Some(left) = until.checked_duration_since(std::time::Instant::now()) {
+                        match rx.recv_timeout(left) {
+                            Ok(mdns_sd::ServiceEvent::ServiceResolved(info)) => {
+                                if let Some(ip) = info.get_addresses_v4().into_iter().next() {
+                                    let addr = SocketAddr::from((ip, info.get_port()));
+                                    let mut map = found.lock().unwrap();
+                                    if map.insert(info.fullname.clone(), addr) != Some(addr) {
+                                        log::info!("found {} at {addr}", info.fullname);
+                                    }
+                                }
                             }
+                            Ok(_) => {}
+                            Err(_) => break,
                         }
-                        mdns_sd::ServiceEvent::ServiceRemoved(_, name) => {
-                            found.lock().unwrap().remove(&name);
-                        }
-                        _ => {}
                     }
+                    let _ = daemon.stop_browse(SERVICE);
                 }
             });
-            daemon
-        });
+        }
         Bonjour {
             found,
             _daemon: daemon,

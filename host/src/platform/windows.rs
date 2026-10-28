@@ -135,11 +135,19 @@ impl Injector {
     }
 
     pub fn set_target(&mut self, m: &Monitor) {
+        // Synthetic pointer coordinates are relative to the virtual desktop's top-left,
+        // not to the primary monitor, so shift by the desktop origin.
+        let (vx, vy) = unsafe {
+            (
+                GetSystemMetrics(SM_XVIRTUALSCREEN),
+                GetSystemMetrics(SM_YVIRTUALSCREEN),
+            )
+        };
         self.rect = RECT {
-            left: m.x,
-            top: m.y,
-            right: m.x + m.width as i32,
-            bottom: m.y + m.height as i32,
+            left: m.x - vx,
+            top: m.y - vy,
+            right: m.x - vx + m.width as i32,
+            bottom: m.y - vy + m.height as i32,
         };
     }
 

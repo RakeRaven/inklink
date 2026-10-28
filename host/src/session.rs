@@ -94,12 +94,22 @@ pub fn run(stream: Stream, display: &Display, injector: &mut Injector) -> Result
             }
             Ok(ClientMsg::Pen(events)) => {
                 if let Some(e) = events.first() {
-                    log::debug!("pen {:?} x{} at {:.3},{:.3} p{:.2}", e.phase, events.len(), e.x, e.y, e.pressure);
+                    log::debug!(
+                        "pen {:?} x{} at {:.3},{:.3} p{:.2}",
+                        e.phase,
+                        events.len(),
+                        e.x,
+                        e.y,
+                        e.pressure
+                    );
                 }
                 events.iter().for_each(|e| injector.pen(e))
             }
             Ok(ClientMsg::Touch(points)) => {
-                log::debug!("touch {:?}", points.iter().map(|p| (p.id, p.phase)).collect::<Vec<_>>());
+                log::debug!(
+                    "touch {:?}",
+                    points.iter().map(|p| (p.id, p.phase)).collect::<Vec<_>>()
+                );
                 injector.touch(&points)
             }
             Ok(ClientMsg::Key { action, combo }) => {
