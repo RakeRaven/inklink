@@ -2,7 +2,7 @@
 use std::io::{self, Read, Write};
 
 pub const PORT: u16 = 47800;
-pub const VERSION: u16 = 1;
+pub const VERSION: u16 = 2;
 pub const SERVICE: &str = "_inklink._tcp.local.";
 const MAX_MSG: usize = 4 << 20;
 
@@ -13,6 +13,7 @@ pub const VIDEO: u8 = 0x02;
 pub const CLIENT_HELLO: u8 = 0x10;
 pub const STREAM_CONFIG: u8 = 0x11;
 pub const KEYFRAME: u8 = 0x12;
+pub const PAN: u8 = 0x13;
 pub const PEN: u8 = 0x20;
 pub const TOUCH: u8 = 0x21;
 pub const KEY: u8 = 0x22;
@@ -40,12 +41,23 @@ pub fn read_msg(r: &mut impl Read) -> io::Result<(u8, Vec<u8>)> {
     Ok((head[0], payload))
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Mode {
+    /// Whole monitor, letterboxed on the iPad.
+    Fit,
+    /// An iPad-shaped slice of the monitor that can be panned.
+    Fill,
+    /// A new extended monitor at the iPad's resolution.
+    Virtual,
+}
+
 pub struct StreamConfig {
     pub monitor: u32,
     pub fps: u32,
     pub kbps: u32,
     pub max_width: u32,
     pub max_height: u32,
+    pub mode: Mode,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -93,12 +105,22 @@ pub enum KeyAction {
 }
 
 pub enum ClientMsg {
-    Hello { version: u16 },
+    Hello {
+        version: u16,
+    },
     Config(StreamConfig),
     Keyframe,
+    /// Moves the Fill slice, in fractions of the visible area.
+    Pan {
+        dx: f32,
+        dy: f32,
+    },
     Pen(Vec<PenEvent>),
     Touch(Vec<TouchPoint>),
-    Key { action: KeyAction, combo: String },
+    Key {
+        action: KeyAction,
+        combo: String,
+    },
     Unknown,
 }
 
@@ -142,7 +164,16 @@ pub fn parse_client(kind: u8, payload: &[u8]) -> io::Result<ClientMsg> {
             kbps: b.u32()?.clamp(1_000, 200_000),
             max_width: b.u32()?.clamp(64, 8192),
             max_height: b.u32()?.clamp(64, 8192),
+            mode: match b.u8()? {
+                1 => Mode::Fill,
+                2 => Mode::Virtual,
+                _ => Mode::Fit,
+            },
         }),
+        PAN => ClientMsg::Pan {
+            dx: b.f32()?.clamp(-1.0, 1.0),
+            dy: b.f32()?.clamp(-1.0, 1.0),
+        },
         KEYFRAME => ClientMsg::Keyframe,
         PEN => {
             let mut events = Vec::new();

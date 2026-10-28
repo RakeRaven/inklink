@@ -7,9 +7,12 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Computer") {
+                Section {
                     LabeledContent("Status", value: model.status)
-                    if let host = model.host {
+                    Picker("Mode", selection: $model.settings.displayMode) {
+                        ForEach(DisplayMode.allCases) { Text($0.title).tag($0) }
+                    }
+                    if let host = model.host, model.settings.displayMode != .virtual {
                         Picker("Screen", selection: $model.settings.monitorID) {
                             ForEach(host.monitors) { m in
                                 Text("\(m.name) · \(m.width)×\(m.height)").tag(m.id)
@@ -23,6 +26,10 @@ struct SettingsView: View {
                         Text("Bitrate: \(Int(model.settings.bitrateMbps)) Mbps")
                         Slider(value: $model.settings.bitrateMbps, in: 5...100, step: 5)
                     }
+                } header: {
+                    Text("Computer")
+                } footer: {
+                    Text("Fill shows an iPad-shaped part of the screen; drag with three fingers to move it. Extra display adds a monitor at the iPad's resolution (Windows needs the Virtual Display Driver).")
                 }
 
                 Section {

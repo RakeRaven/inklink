@@ -59,6 +59,12 @@ final class StreamViewController: UIViewController {
             let combo = count == 2 ? model.settings.twoFingerTap : count == 3 ? model.settings.threeFingerTap : ""
             if !combo.isEmpty { link.send(Message.key(.tap, combo)) }
         }
+        streamView.fingers.pan = { [weak self] dx, dy in
+            guard let self else { return }
+            let r = streamView.contentRect
+            guard r.width > 0, r.height > 0 else { return }
+            link.send(Message.pan(dx: Float(dx / r.width), dy: Float(dy / r.height)))
+        }
         toolbar.onKey = { [link] action, combo in link.send(Message.key(action, combo)) }
         toolbar.onSettings = { [weak self] in self?.showSettings() }
         toolbar.onEraser = { [weak self] in self?.perform(.eraser) }
@@ -78,7 +84,7 @@ final class StreamViewController: UIViewController {
 
         model.$settings.sink { [weak self] s in self?.applySettings(s) }.store(in: &bag)
         model.$settings
-            .map { [$0.monitorID, UInt32($0.fps), UInt32($0.bitrateMbps)] }
+            .map { [$0.monitorID, UInt32($0.fps), UInt32($0.bitrateMbps), UInt32($0.displayMode.wire)] }
             .removeDuplicates()
             .dropFirst()
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
@@ -107,7 +113,8 @@ final class StreamViewController: UIViewController {
         let s = model.settings
         link.send(Message.config(
             monitor: s.monitorID, fps: s.fps, kbps: Int(s.bitrateMbps * 1000),
-            width: Int(configuredSize.width * scale), height: Int(configuredSize.height * scale)))
+            width: Int(configuredSize.width * scale), height: Int(configuredSize.height * scale),
+            mode: s.displayMode))
     }
 
     private func apply(_ state: HostLink.State) {

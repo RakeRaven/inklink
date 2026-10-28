@@ -19,7 +19,7 @@ use super::Monitor;
 use crate::keys::Key;
 use crate::protocol::{KeyAction, PenEvent, PenPhase, TouchPhase, TouchPoint};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct Source {
     pub fd: i32,
     pub node: u32,
@@ -30,8 +30,8 @@ pub fn find_runtime() -> Result<()> {
     Ok(())
 }
 
-pub struct Display {
-    runtime: tokio::runtime::Runtime,
+/// One running portal screencast; the compositor keeps it (and a virtual output) alive until closed.
+struct Cast {
     _proxy: Screencast,
     session: Session<Screencast>,
     fd: OwnedFd,
@@ -40,80 +40,73 @@ pub struct Display {
     height: u32,
 }
 
-fn token_path() -> PathBuf {
+fn token_path(name: &str) -> PathBuf {
     let base = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
             PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".config")
         });
-    base.join("inklink").join("portal-token")
+    base.join("inklink").join(name)
 }
 
-impl Display {
-    /// Asks the compositor for a monitor once; the restore token skips the dialog next time.
-    pub fn open() -> Result<Display> {
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(1)
-            .enable_all()
-            .build()?;
-        let token = std::fs::read_to_string(token_path()).ok();
-        let (proxy, session, fd, node, size, new_token) = runtime.block_on(async {
-            let proxy = Screencast::new().await?;
-            let session = proxy.create_session(Default::default()).await?;
-            proxy
-                .select_sources(
-                    &session,
-                    SelectSourcesOptions::default()
-                        .set_cursor_mode(CursorMode::Embedded)
-                        .set_sources(BitFlags::from(SourceType::Monitor))
-                        .set_multiple(false)
-                        .set_persist_mode(PersistMode::ExplicitlyRevoked)
-                        .set_restore_token(token.as_deref()),
-                )
-                .await?
-                .response()?;
-            let streams = proxy
-                .start(&session, None, StartCastOptions::default())
-                .await?
-                .response()?;
-            let stream = streams
-                .streams()
-                .first()
-                .context("portal returned no stream")?
-                .clone();
-            let fd = proxy
-                .open_pipe_wire_remote(&session, OpenPipeWireRemoteOptions::default())
-                .await?;
-            anyhow::Ok((
-                proxy,
-                session,
-                fd,
-                stream.pipe_wire_node_id(),
-                stream.size(),
-                streams.restore_token().map(str::to_owned),
-            ))
-        })?;
-        if let Some(t) = new_token {
-            let path = token_path();
-            let _ = std::fs::create_dir_all(path.parent().unwrap());
-            let _ = std::fs::write(path, t);
-        }
-        let (w, h) = size.unwrap_or((1920, 1080));
-        Ok(Display {
-            runtime,
+/// Asks the compositor for a source; the restore token skips the dialog next time.
+fn start_cast(
+    runtime: &tokio::runtime::Runtime,
+    source: SourceType,
+    token_name: &str,
+) -> Result<Cast> {
+    let path = token_path(token_name);
+    let token = std::fs::read_to_string(&path).ok();
+    let (cast, new_token) = runtime.block_on(async {
+        let proxy = Screencast::new().await?;
+        let session = proxy.create_session(Default::default()).await?;
+        proxy
+            .select_sources(
+                &session,
+                SelectSourcesOptions::default()
+                    .set_cursor_mode(CursorMode::Embedded)
+                    .set_sources(BitFlags::from(source))
+                    .set_multiple(false)
+                    .set_persist_mode(PersistMode::ExplicitlyRevoked)
+                    .set_restore_token(token.as_deref()),
+            )
+            .await?
+            .response()?;
+        let streams = proxy
+            .start(&session, None, StartCastOptions::default())
+            .await?
+            .response()?;
+        let stream = streams
+            .streams()
+            .first()
+            .context("portal returned no stream")?
+            .clone();
+        let fd = proxy
+            .open_pipe_wire_remote(&session, OpenPipeWireRemoteOptions::default())
+            .await?;
+        let (w, h) = stream.size().unwrap_or((1920, 1080));
+        let cast = Cast {
             _proxy: proxy,
             session,
             fd,
-            node,
+            node: stream.pipe_wire_node_id(),
             width: w.max(1) as u32,
             height: h.max(1) as u32,
-        })
+        };
+        anyhow::Ok((cast, streams.restore_token().map(str::to_owned)))
+    })?;
+    if let Some(t) = new_token {
+        let _ = std::fs::create_dir_all(path.parent().unwrap());
+        let _ = std::fs::write(path, t);
     }
+    Ok(cast)
+}
 
-    pub fn monitors(&self) -> Vec<Monitor> {
-        vec![Monitor {
-            id: 0,
-            name: "Shared screen".into(),
+impl Cast {
+    fn monitor(&self, id: u32, name: &str) -> Monitor {
+        Monitor {
+            id,
+            name: name.into(),
             width: self.width,
             height: self.height,
             x: 0,
@@ -122,13 +115,62 @@ impl Display {
                 fd: self.fd.as_raw_fd(),
                 node: self.node,
             },
-        }]
+        }
+    }
+}
+
+pub struct Display {
+    runtime: tokio::runtime::Runtime,
+    screen: Cast,
+}
+
+impl Display {
+    pub fn open() -> Result<Display> {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()?;
+        let screen = start_cast(&runtime, SourceType::Monitor, "portal-token")?;
+        Ok(Display { runtime, screen })
+    }
+
+    pub fn monitors(&self) -> Vec<Monitor> {
+        vec![self.screen.monitor(0, "Shared screen")]
+    }
+
+    /// A new output from the compositor (KDE, GNOME and others). Its size is the compositor's choice.
+    pub fn virtual_display(&self, width: u32, height: u32, fps: u32) -> Result<VirtualDisplay> {
+        let cast = start_cast(&self.runtime, SourceType::Virtual, "portal-token-virtual")
+            .context("the compositor didn't offer a virtual screen")?;
+        let monitor = cast.monitor(u32::MAX, "iPad (virtual)");
+        Ok(VirtualDisplay {
+            monitor,
+            size: (width, height, fps),
+            cast: Some(cast),
+            runtime: self.runtime.handle().clone(),
+        })
     }
 }
 
 impl Drop for Display {
     fn drop(&mut self) {
-        let _ = self.runtime.block_on(self.session.close());
+        let _ = self.runtime.block_on(self.screen.session.close());
+    }
+}
+
+/// A virtual output that exists while this value lives.
+pub struct VirtualDisplay {
+    pub monitor: Monitor,
+    pub size: (u32, u32, u32),
+    cast: Option<Cast>,
+    runtime: tokio::runtime::Handle,
+}
+
+impl Drop for VirtualDisplay {
+    fn drop(&mut self) {
+        if let Some(cast) = self.cast.take() {
+            let _ = self.runtime.block_on(cast.session.close());
+        }
     }
 }
 

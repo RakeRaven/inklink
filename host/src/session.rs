@@ -4,10 +4,10 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::{Result, bail};
 
-use crate::capture::Capture;
+use crate::capture::{Capture, Crop};
 use crate::keys::parse_combo;
 use crate::net::Stream;
-use crate::platform::{Display, Injector};
+use crate::platform::{Display, Injector, Monitor, VirtualDisplay};
 use crate::protocol::*;
 
 pub fn run(stream: Stream, display: &Display, injector: &mut Injector) -> Result<()> {
@@ -44,6 +44,16 @@ pub fn run(stream: Stream, display: &Display, injector: &mut Injector) -> Result
     )?;
 
     let mut capture: Option<Capture> = None;
+    let mut virt: Option<VirtualDisplay> = None;
+    let mut target: Option<Monitor> = None;
+    let mut crop = Crop {
+        x: 0,
+        y: 0,
+        w: 1,
+        h: 1,
+    };
+    // Fill slice centre, kept across reconfigures such as rotating the iPad.
+    let mut center = (0.5, 0.5);
     let result = loop {
         let (kind, payload) = match read_msg(&mut reader) {
             Ok(m) => m,
@@ -64,14 +74,46 @@ pub fn run(stream: Stream, display: &Display, injector: &mut Injector) -> Result
         match parse_client(kind, &payload) {
             Ok(ClientMsg::Config(cfg)) => {
                 capture = None;
-                let Some(monitor) = monitors
-                    .iter()
-                    .find(|m| m.id == cfg.monitor)
-                    .or(monitors.first())
-                else {
-                    break Err(anyhow::anyhow!("no monitors to capture"));
+                let mut mode = cfg.mode;
+                if mode == Mode::Virtual {
+                    // Keep the same virtual monitor across repeated configs; recreate on resize.
+                    let want = (cfg.max_width, cfg.max_height, cfg.fps);
+                    if virt.as_ref().map(|v| v.size) != Some(want) {
+                        virt = None;
+                        match display.virtual_display(want.0, want.1, want.2) {
+                            Ok(v) => virt = Some(v),
+                            Err(e) => {
+                                log::error!(
+                                    "virtual display unavailable, mirroring instead: {e:#}"
+                                );
+                                mode = Mode::Fit;
+                            }
+                        }
+                    }
+                } else {
+                    virt = None;
+                }
+                let monitor = match (&virt, mode) {
+                    (Some(v), Mode::Virtual) => v.monitor.clone(),
+                    _ => match monitors
+                        .iter()
+                        .find(|m| m.id == cfg.monitor)
+                        .or(monitors.first())
+                    {
+                        Some(m) => m.clone(),
+                        None => break Err(anyhow::anyhow!("no monitors to capture")),
+                    },
                 };
-                injector.set_target(monitor);
+                crop = match mode {
+                    Mode::Fill => Crop::fill(
+                        &monitor,
+                        cfg.max_width as f64 / cfg.max_height as f64,
+                        center.0,
+                        center.1,
+                    ),
+                    _ => Crop::full(&monitor),
+                };
+                injector.set_target(&monitor);
                 let w = writer.clone();
                 let sink = Arc::new(move |au: &[u8]| {
                     let mut s = w.lock().unwrap();
@@ -82,9 +124,23 @@ pub fn run(stream: Stream, display: &Display, injector: &mut Injector) -> Result
                     }
                     ok
                 });
-                match Capture::start(monitor, &cfg, sink) {
+                match Capture::start(&monitor, crop, &cfg, sink) {
                     Ok(c) => capture = Some(c),
                     Err(e) => log::error!("capture failed: {e:#}"),
+                }
+                target = Some(monitor);
+            }
+            Ok(ClientMsg::Pan { dx, dy }) => {
+                if let (Some(m), Some(c)) = (&target, &capture) {
+                    // Dragging right shows what's to the left.
+                    let (cx, cy) = crop.center(m);
+                    crop.center_on(
+                        m,
+                        cx - dx as f64 * crop.w as f64 / m.width as f64,
+                        cy - dy as f64 * crop.h as f64 / m.height as f64,
+                    );
+                    center = crop.center(m);
+                    c.set_crop(crop);
                 }
             }
             Ok(ClientMsg::Keyframe) => {
@@ -103,13 +159,25 @@ pub fn run(stream: Stream, display: &Display, injector: &mut Injector) -> Result
                         e.pressure
                     );
                 }
-                events.iter().for_each(|e| injector.pen(e))
+                let Some(m) = &target else { continue };
+                for mut e in events {
+                    (e.x, e.y) = crop.to_monitor(m, e.x, e.y);
+                    injector.pen(&e);
+                }
             }
             Ok(ClientMsg::Touch(points)) => {
                 log::debug!(
                     "touch {:?}",
                     points.iter().map(|p| (p.id, p.phase)).collect::<Vec<_>>()
                 );
+                let Some(m) = &target else { continue };
+                let points: Vec<TouchPoint> = points
+                    .into_iter()
+                    .map(|mut p| {
+                        (p.x, p.y) = crop.to_monitor(m, p.x, p.y);
+                        p
+                    })
+                    .collect();
                 injector.touch(&points)
             }
             Ok(ClientMsg::Key { action, combo }) => {
@@ -122,6 +190,7 @@ pub fn run(stream: Stream, display: &Display, injector: &mut Injector) -> Result
     };
     injector.reset();
     drop(capture);
+    drop(virt);
     writer.lock().unwrap().shutdown();
     result
 }

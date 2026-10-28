@@ -3,7 +3,7 @@ import Foundation
 // Wire format shared with host/src/protocol.rs: [u8 kind][u32 LE length][payload].
 enum Wire {
     static let port: UInt16 = 47800
-    static let version: UInt16 = 1
+    static let version: UInt16 = 2
     static let bonjourType = "_inklink._tcp."
 
     static let hostHello: UInt8 = 0x01
@@ -11,6 +11,7 @@ enum Wire {
     static let clientHello: UInt8 = 0x10
     static let streamConfig: UInt8 = 0x11
     static let keyframe: UInt8 = 0x12
+    static let pan: UInt8 = 0x13
     static let pen: UInt8 = 0x20
     static let touch: UInt8 = 0x21
     static let key: UInt8 = 0x22
@@ -108,14 +109,23 @@ enum Message {
         return Wire.frame(Wire.clientHello, w.data)
     }
 
-    static func config(monitor: UInt32, fps: Int, kbps: Int, width: Int, height: Int) -> Data {
+    static func config(monitor: UInt32, fps: Int, kbps: Int, width: Int, height: Int, mode: DisplayMode) -> Data {
         var w = ByteWriter()
         w.u32(monitor)
         w.u16(UInt16(fps))
         w.u32(UInt32(kbps))
         w.u32(UInt32(width))
         w.u32(UInt32(height))
+        w.u8(mode.wire)
         return Wire.frame(Wire.streamConfig, w.data)
+    }
+
+    /// Moves the Fill slice by a fraction of the visible area.
+    static func pan(dx: Float, dy: Float) -> Data {
+        var w = ByteWriter()
+        w.f32(dx)
+        w.f32(dy)
+        return Wire.frame(Wire.pan, w.data)
     }
 
     static func pen(_ samples: [PenSample]) -> Data {

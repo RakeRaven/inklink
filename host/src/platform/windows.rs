@@ -52,7 +52,18 @@ impl Display {
         unsafe {
             let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         }
+        super::vdd::cleanup_stale();
         Ok(Display)
+    }
+
+    /// An extended monitor at the iPad's resolution, via the Virtual Display Driver.
+    pub fn virtual_display(
+        &self,
+        width: u32,
+        height: u32,
+        fps: u32,
+    ) -> Result<super::VirtualDisplay> {
+        super::VirtualDisplay::create(width, height, fps, || self.monitors())
     }
 
     pub fn monitors(&self) -> Vec<Monitor> {

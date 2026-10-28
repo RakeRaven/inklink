@@ -8,6 +8,19 @@ enum PencilAction: Codable, Hashable {
     case none
 }
 
+enum DisplayMode: String, Codable, CaseIterable, Identifiable {
+    /// The whole monitor, with bars where the shapes differ.
+    case fit
+    /// An iPad-shaped slice of the monitor, panned with three fingers.
+    case fill
+    /// A new extended monitor at the iPad's resolution.
+    case virtual
+
+    var id: Self { self }
+    var wire: UInt8 { switch self { case .fit: 0; case .fill: 1; case .virtual: 2 } }
+    var title: String { switch self { case .fit: "Mirror (fit)"; case .fill: "Mirror (fill)"; case .virtual: "Extra display" } }
+}
+
 struct ToolbarButton: Codable, Identifiable, Hashable {
     var id = UUID()
     var label: String
@@ -17,6 +30,7 @@ struct ToolbarButton: Codable, Identifiable, Hashable {
 }
 
 struct Settings: Codable, Equatable {
+    var displayMode = DisplayMode.fit
     var monitorID: UInt32 = 0
     var fps = 60
     var bitrateMbps = 30.0
@@ -51,6 +65,7 @@ struct Settings: Codable, Equatable {
         func get<T: Decodable>(_ key: CodingKeys, _ fallback: T) -> T {
             (try? c.decodeIfPresent(T.self, forKey: key)) ?? fallback
         }
+        displayMode = get(.displayMode, d.displayMode)
         monitorID = get(.monitorID, d.monitorID)
         fps = get(.fps, d.fps)
         bitrateMbps = get(.bitrateMbps, d.bitrateMbps)

@@ -13,7 +13,16 @@ Use an iPad + Apple Pencil as a pen display for a Windows or Linux computer. The
 - **Tap gestures**: two-finger tap undo, three-finger tap redo (configurable). Taps never reach the computer as touches.
 - **Palm rejection** while the Pencil is down or hovering.
 - **Toolbar**: Ctrl / Shift / Alt / Space that stay held while your finger is down, plus any shortcuts you like. Left or right edge.
-- Pick the monitor, frame rate (up to 120) and bitrate from the iPad.
+- Pick the monitor, frame rate (up to 120) and bitrate from the iPad. Settings are remembered.
+
+## Modes
+
+- **Mirror (fit)**: the whole monitor, with bars where its shape differs from the iPad's.
+- **Mirror (fill)**: an iPad-shaped slice of the monitor fills the screen. Drag with three fingers to move it around.
+- **Extra display**: a new extended monitor at the iPad's exact resolution and refresh rate, removed again when the iPad disconnects.
+  - Windows: install the [Virtual Display Driver](https://github.com/VirtualDrivers/Virtual-Display-Driver/releases) once, and give your user write access to `C:\VirtualDisplayDriver` (where it reads `vdd_settings.xml`). InkLink keeps a backup of any config it replaces.
+  - Linux: uses the portal's virtual screen (KDE Plasma 6, GNOME). The compositor picks the size.
+  - If it isn't available, the host falls back to mirroring and says why in its log.
 
 ## Connecting
 

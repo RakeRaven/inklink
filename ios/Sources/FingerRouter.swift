@@ -8,8 +8,11 @@ final class FingerRouter {
     var passThrough = true
     /// Send one-finger drags to the host too (most drawing apps would draw with them).
     var oneFingerDrags = false
+    /// Three-finger drags move the Fill slice instead of reaching the host; deltas are in points.
+    var panEnabled = false
+    var pan: (CGFloat, CGFloat) -> Void = { _, _ in }
 
-    private enum State { case idle, deciding, holding, live }
+    private enum State { case idle, deciding, holding, live, panning }
 
     private static let window: TimeInterval = 0.25
     private static let slop: CGFloat = 12
@@ -25,6 +28,8 @@ final class FingerRouter {
     private var starts: [ObjectIdentifier: CGPoint] = [:]
     private var maxFingers = 0
     private var timer: DispatchWorkItem?
+    private var points: [ObjectIdentifier: CGPoint] = [:]
+    private var centroid: CGPoint?
 
     func began(_ touches: [UITouch], in view: UIView, reject: (UITouch) -> Bool, normalize: (CGPoint) -> (Float, Float)) {
         for t in touches {
@@ -49,6 +54,8 @@ final class FingerRouter {
             let p = t.location(in: view)
             let n = normalize(p)
             last[id] = n
+            points[key] = p
+            centroid = nil
             maxFingers = max(maxFingers, ids.count)
             switch state {
             case .deciding:
@@ -77,6 +84,7 @@ final class FingerRouter {
             let p = t.location(in: view)
             let n = normalize(p)
             last[id] = n
+            points[key] = p
             if state == .deciding, let s = starts[key], hypot(p.x - s.x, p.y - s.y) > Self.slop {
                 decide()
             }
@@ -85,6 +93,12 @@ final class FingerRouter {
             case .live: samples.append(TouchSample(id: id, phase: .move, x: n.0, y: n.1))
             default: break
             }
+        }
+        if state == .panning, !points.isEmpty {
+            let c = CGPoint(x: points.values.map(\.x).reduce(0, +) / CGFloat(points.count),
+                            y: points.values.map(\.y).reduce(0, +) / CGFloat(points.count))
+            if let old = centroid { pan(c.x - old.x, c.y - old.y) }
+            centroid = c
         }
         send(samples)
     }
@@ -96,6 +110,8 @@ final class FingerRouter {
             if ignored.remove(key) != nil { continue }
             guard let id = ids.removeValue(forKey: key) else { continue }
             last[id] = nil
+            points[key] = nil
+            centroid = nil
             let n = normalize(t.location(in: view))
             let up = TouchSample(id: id, phase: .up, x: n.0, y: n.1)
             if state == .deciding { pending.append(up) } else { ups.append(up) }
@@ -123,7 +139,10 @@ final class FingerRouter {
     private func decide() {
         guard state == .deciding else { return }
         timer?.cancel()
-        if ids.count >= 2 || (oneFingerDrags && !ids.isEmpty) {
+        if panEnabled, ids.count >= 3 {
+            state = .panning
+            centroid = nil
+        } else if ids.count >= 2 || (oneFingerDrags && !ids.isEmpty) {
             state = .live
             send(pending.filter { s in ids.values.contains(s.id) || s.phase == .up })
         } else {
@@ -141,6 +160,8 @@ final class FingerRouter {
     private func drop(_ key: ObjectIdentifier) {
         guard let id = ids.removeValue(forKey: key) else { return }
         ignored.insert(key)
+        points[key] = nil
+        centroid = nil
         dropped = true
         pending.removeAll { $0.id == id }
         if sent.contains(id), let p = last[id] {
@@ -155,6 +176,8 @@ final class FingerRouter {
 
     private func reset() {
         state = .idle
+        points = [:]
+        centroid = nil
         pending = []
         sent = []
     }
