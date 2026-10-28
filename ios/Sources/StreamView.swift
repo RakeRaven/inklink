@@ -66,8 +66,14 @@ final class StreamView: UIView, UIPencilInteractionDelegate {
         return PenSample(phase: phase, eraser: eraser, x: x, y: y, pressure: pressure, tiltX: tx, tiltY: ty, twist: twist)
     }
 
+    // Hands stay planted between strokes, so fingers are ignored for a moment after the pen.
     private var pencilBusy: Bool {
-        pen != nil || hovering || Date().timeIntervalSince(lastPencil) < 0.4
+        pen != nil || hovering || Date().timeIntervalSince(lastPencil) < 1.0
+    }
+
+    /// Fingertips report a radius around 10 pt; a resting palm or hand edge is far larger.
+    private static func isPalm(_ t: UITouch) -> Bool {
+        t.majorRadius > 30
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -77,6 +83,7 @@ final class StreamView: UIView, UIPencilInteractionDelegate {
                 guard pen == nil else { continue }
                 pen = t
                 leaveWork?.cancel()
+                if settings.palmRejection { fingers.cancelAll() }
                 send(Message.pen([sample(t, .down)]))
             } else if t.type == .direct {
                 direct.append(t)
@@ -84,7 +91,9 @@ final class StreamView: UIView, UIPencilInteractionDelegate {
         }
         if !direct.isEmpty {
             fingers.passThrough = settings.fingersToHost
-            fingers.began(direct, in: self, reject: settings.palmRejection && pencilBusy, normalize: normalize)
+            let reject = settings.palmRejection
+            let busy = pencilBusy
+            fingers.began(direct, in: self, reject: { reject && (busy || Self.isPalm($0)) }, normalize: normalize)
         }
     }
 
@@ -96,7 +105,10 @@ final class StreamView: UIView, UIPencilInteractionDelegate {
             lastPencil = Date()
         }
         let direct = touches.filter { $0.type == .direct }
-        if !direct.isEmpty { fingers.moved(Array(direct), in: self, normalize: normalize) }
+        if !direct.isEmpty {
+            let reject = settings.palmRejection
+            fingers.moved(Array(direct), in: self, isPalm: { reject && Self.isPalm($0) }, normalize: normalize)
+        }
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
