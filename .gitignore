@@ -5,3 +5,4 @@ ios/Payload/
 ios/Support/Info.plist
 *.ipa
 .DS_Store
+dist/
