@@ -9,6 +9,8 @@ const MAX_MSG: usize = 4 << 20;
 // host -> iPad
 pub const HOST_HELLO: u8 = 0x01;
 pub const VIDEO: u8 = 0x02;
+/// A message for the person at the iPad, e.g. why a mode fell back.
+pub const NOTICE: u8 = 0x03;
 // iPad -> host
 pub const CLIENT_HELLO: u8 = 0x10;
 pub const STREAM_CONFIG: u8 = 0x11;
@@ -252,6 +254,12 @@ pub fn host_hello(host_name: &str, monitors: &[MonitorInfo]) -> Vec<u8> {
         p.extend_from_slice(&m.height.to_le_bytes());
         put_str(&mut p, m.name);
     }
+    p
+}
+
+pub fn notice(text: &str) -> Vec<u8> {
+    let mut p = Vec::new();
+    put_str(&mut p, text);
     p
 }
 

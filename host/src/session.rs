@@ -86,6 +86,10 @@ pub fn run(stream: Stream, display: &Display, injector: &mut Injector) -> Result
                                 log::error!(
                                     "virtual display unavailable, mirroring instead: {e:#}"
                                 );
+                                let text =
+                                    format!("Extra display unavailable, mirroring instead: {e:#}");
+                                let _ =
+                                    write_msg(&mut *writer.lock().unwrap(), NOTICE, &notice(&text));
                                 mode = Mode::Fit;
                             }
                         }

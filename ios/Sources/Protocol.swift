@@ -8,6 +8,7 @@ enum Wire {
 
     static let hostHello: UInt8 = 0x01
     static let video: UInt8 = 0x02
+    static let notice: UInt8 = 0x03
     static let clientHello: UInt8 = 0x10
     static let streamConfig: UInt8 = 0x11
     static let keyframe: UInt8 = 0x12

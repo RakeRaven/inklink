@@ -37,6 +37,7 @@ final class StreamViewController: UIViewController {
         toast.clipsToBounds = true
         toast.textAlignment = .center
         toast.alpha = 0
+        toast.numberOfLines = 0
         NSLayoutConstraint.activate([
             streamView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             streamView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -48,8 +49,9 @@ final class StreamViewController: UIViewController {
             toolbar.centerYAnchor.constraint(equalTo: view.centerYAnchor),
             toast.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
             toast.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            toast.widthAnchor.constraint(equalToConstant: 160),
-            toast.heightAnchor.constraint(equalToConstant: 36),
+            toast.widthAnchor.constraint(greaterThanOrEqualToConstant: 160),
+            toast.widthAnchor.constraint(lessThanOrEqualToConstant: 520),
+            toast.heightAnchor.constraint(greaterThanOrEqualToConstant: 36),
         ])
 
         streamView.send = { [link] in link.send($0) }
@@ -81,6 +83,10 @@ final class StreamViewController: UIViewController {
             sendConfig()
         }
         link.onState = { [weak self] state in self?.apply(state) }
+        link.onNotice = { [weak self] text in
+            self?.model.status = text
+            self?.flash(text)
+        }
 
         model.$settings.sink { [weak self] s in self?.applySettings(s) }.store(in: &bag)
         model.$settings
@@ -109,11 +115,15 @@ final class StreamViewController: UIViewController {
     private func sendConfig() {
         guard model.host != nil else { return }
         configuredSize = streamView.bounds.size
-        let scale = view.window?.screen.scale ?? traitCollection.displayScale
+        // Real panel pixels: with Display Zoom "More Space", bounds × scale is larger than the panel.
+        let native = (view.window?.screen ?? UIScreen.main).nativeBounds.size
+        let (long, short) = (max(native.width, native.height), min(native.width, native.height))
+        let landscape = configuredSize.width >= configuredSize.height
+        let pixels = landscape ? CGSize(width: long, height: short) : CGSize(width: short, height: long)
         let s = model.settings
         link.send(Message.config(
             monitor: s.monitorID, fps: s.fps, kbps: Int(s.bitrateMbps * 1000),
-            width: Int(configuredSize.width * scale), height: Int(configuredSize.height * scale),
+            width: Int(pixels.width), height: Int(pixels.height),
             mode: s.displayMode))
     }
 
@@ -165,9 +175,10 @@ final class StreamViewController: UIViewController {
     }
 
     private func flash(_ text: String) {
-        toast.text = text
+        toast.text = "  \(text)  "
         toast.alpha = 1
-        UIView.animate(withDuration: 0.3, delay: 0.8) { self.toast.alpha = 0 }
+        // Long messages (like a mode falling back) stay up long enough to read.
+        UIView.animate(withDuration: 0.3, delay: max(0.8, Double(text.count) / 20)) { self.toast.alpha = 0 }
     }
 
     private func showSettings() {

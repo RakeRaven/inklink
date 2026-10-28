@@ -10,6 +10,7 @@ final class HostLink {
 
     var onState: ((State) -> Void)?
     var onHello: ((HostInfo) -> Void)?
+    var onNotice: ((String) -> Void)?
     /// Called on the network queue.
     var onVideo: ((Data) -> Void)?
 
@@ -107,6 +108,11 @@ final class HostLink {
         case Wire.hostHello:
             if let info = try? HostInfo(payload) {
                 DispatchQueue.main.async { self.onHello?(info) }
+            }
+        case Wire.notice:
+            var r = ByteReader(payload)
+            if let text = try? r.str() {
+                DispatchQueue.main.async { self.onNotice?(text) }
             }
         default:
             break
