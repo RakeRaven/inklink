@@ -4,9 +4,9 @@ mod linux;
 mod windows;
 
 #[cfg(target_os = "linux")]
-pub use linux::{Display, Injector, Source};
+pub use linux::{Display, Injector, Source, find_runtime};
 #[cfg(windows)]
-pub use windows::{Display, Injector, Source};
+pub use windows::{Display, Injector, Source, find_runtime};
 
 pub struct Monitor {
     pub id: u32,

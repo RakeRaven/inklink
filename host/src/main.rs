@@ -14,7 +14,19 @@ const USAGE: &str = "inklink-host [--host <ipad-ip>]\n\n\
 Waits for the InkLink iPad app over USB (needs usbmuxd / Apple Devices) or Wi-Fi (Bonjour),\n\
 or connects to --host directly. Set RUST_LOG=debug for more output.";
 
-fn main() -> Result<()> {
+fn main() {
+    if let Err(e) = run() {
+        eprintln!("error: {e:#}");
+        // Keep a double-clicked console window open long enough to read it.
+        if cfg!(windows) {
+            eprintln!("Press Enter to close.");
+            let _ = std::io::stdin().read_line(&mut String::new());
+        }
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     let mut fixed: Option<SocketAddr> = None;
@@ -36,7 +48,8 @@ fn main() -> Result<()> {
         }
     }
 
-    gstreamer::init().context("GStreamer runtime not found (see README)")?;
+    platform::find_runtime()?;
+    gstreamer::init().context("GStreamer failed to start")?;
     let display = platform::Display::open()?;
     let mut injector = platform::Injector::new()?;
     let bonjour = net::Bonjour::start();

@@ -25,6 +25,11 @@ pub struct Source {
     pub node: u32,
 }
 
+// System packages are already on the loader path.
+pub fn find_runtime() -> Result<()> {
+    Ok(())
+}
+
 pub struct Display {
     runtime: tokio::runtime::Runtime,
     _proxy: Screencast,

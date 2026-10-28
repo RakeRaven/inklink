@@ -25,6 +25,25 @@ use crate::protocol::{KeyAction, PenEvent, PenPhase, TouchPhase, TouchPoint};
 
 pub type Source = u64;
 
+/// Puts the GStreamer install on PATH before its delay-loaded DLLs are first used.
+pub fn find_runtime() -> Result<()> {
+    let root = std::env::var_os("GSTREAMER_1_0_ROOT_MSVC_X86_64")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| r"C:\Program Files\gstreamer\1.0\msvc_x86_64".into());
+    let bin = root.join("bin");
+    anyhow::ensure!(
+        bin.join("gstreamer-1.0-0.dll").exists(),
+        "GStreamer runtime not found in {}. Install the MSVC 64-bit runtime from https://gstreamer.freedesktop.org/download/",
+        root.display()
+    );
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    let mut dirs = vec![bin];
+    dirs.extend(std::env::split_paths(&path));
+    // Single-threaded here: nothing else reads the environment yet.
+    unsafe { std::env::set_var("PATH", std::env::join_paths(dirs)?) };
+    Ok(())
+}
+
 pub struct Display;
 
 impl Display {
