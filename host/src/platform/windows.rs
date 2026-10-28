@@ -1,6 +1,6 @@
 // Monitor enumeration and Windows Ink pen/touch injection via synthetic pointer devices.
 use anyhow::{Context, Result};
-use windows::Win32::Foundation::{LPARAM, POINT, RECT};
+use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
 use windows::Win32::Graphics::Gdi::{
     EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFOEXW,
 };
@@ -120,6 +120,12 @@ pub struct Injector {
     pen_in_range: bool,
     contacts: Vec<Contact>,
     held: Vec<u16>,
+    /// Virtual desktop origin; injected points are relative to it.
+    origin: POINT,
+    /// Window last touched on the streamed monitor, which toolbar keys go to.
+    canvas: HWND,
+    /// Window that had focus before toolbar keys borrowed it.
+    restore: Option<HWND>,
 }
 
 impl Injector {
@@ -141,6 +147,9 @@ impl Injector {
                 pen_in_range: false,
                 contacts: Vec::new(),
                 held: Vec::new(),
+                origin: POINT::default(),
+                canvas: HWND::default(),
+                restore: None,
             })
         }
     }
@@ -154,6 +163,8 @@ impl Injector {
                 GetSystemMetrics(SM_YVIRTUALSCREEN),
             )
         };
+        self.origin = POINT { x: vx, y: vy };
+        self.canvas = HWND::default();
         self.rect = RECT {
             left: m.x - vx,
             top: m.y - vy,
@@ -246,6 +257,9 @@ impl Injector {
         };
         match unsafe { InjectSyntheticPointerInput(self.pen, &[input]) } {
             Ok(()) => {
+                if e.phase == PenPhase::Down {
+                    self.remember_window(info.pointerInfo.ptPixelLocation);
+                }
                 self.pen_contact = contact;
                 self.pen_in_range = flags.0 & POINTER_FLAG_INRANGE.0 != 0;
             }
@@ -261,6 +275,9 @@ impl Injector {
             match (p.phase, existing) {
                 (TouchPhase::Down, None) if count < MAX_TOUCHES => {
                     let primary = count == 0;
+                    if primary {
+                        self.remember_window(point);
+                    }
                     self.contacts.push(Contact {
                         id: p.id,
                         point,
@@ -327,9 +344,37 @@ impl Injector {
         }
     }
 
+    fn remember_window(&mut self, injected: POINT) {
+        let screen = POINT { x: injected.x + self.origin.x, y: injected.y + self.origin.y };
+        self.canvas = unsafe { GetAncestor(WindowFromPoint(screen), GA_ROOT) };
+    }
+
+    /// The window toolbar keys are meant for: the last one touched, else the one mid-screen.
+    fn key_target(&self) -> HWND {
+        if !self.canvas.is_invalid() && unsafe { IsWindow(Some(self.canvas)) }.as_bool() {
+            return self.canvas;
+        }
+        let r = self.rect;
+        let mid = POINT {
+            x: (r.left + r.right) / 2 + self.origin.x,
+            y: (r.top + r.bottom) / 2 + self.origin.y,
+        };
+        unsafe { GetAncestor(WindowFromPoint(mid), GA_ROOT) }
+    }
+
     pub fn key(&mut self, action: KeyAction, keys: &[Key]) {
         let vks: Vec<u16> = keys.iter().map(|k| k.vk).collect();
         if matches!(action, KeyAction::Down | KeyAction::Tap) {
+            // Borrow focus for the canvas window, e.g. CSP on the iPad while Discord has focus.
+            let target = self.key_target();
+            let current = unsafe { GetForegroundWindow() };
+            if !target.is_invalid() && target != current {
+                if unsafe { SetForegroundWindow(target) }.as_bool() {
+                    self.restore.get_or_insert(current);
+                } else {
+                    log::debug!("couldn't focus the canvas window for keys");
+                }
+            }
             for &vk in &vks {
                 send_key(vk, false);
                 self.held.push(vk);
@@ -340,6 +385,15 @@ impl Injector {
                 send_key(vk, true);
                 if let Some(i) = self.held.iter().rposition(|&h| h == vk) {
                     self.held.remove(i);
+                }
+            }
+            if self.held.is_empty() {
+                if let Some(prev) = self.restore.take() {
+                    // Give the canvas app time to take the keys before focus goes back.
+                    std::thread::sleep(std::time::Duration::from_millis(60));
+                    unsafe {
+                        let _ = SetForegroundWindow(prev);
+                    }
                 }
             }
         }
