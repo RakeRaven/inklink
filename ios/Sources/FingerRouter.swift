@@ -77,7 +77,8 @@ final class FingerRouter {
         for t in touches {
             let key = ObjectIdentifier(t)
             guard let id = ids[key] else { continue }
-            if isPalm(t) {
+            // Fingers in a running pinch/rotate flatten as they twist; only judge touches not yet in a gesture.
+            if state != .live, state != .panning, isPalm(t) {
                 drop(key)
                 continue
             }
