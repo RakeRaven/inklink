@@ -81,13 +81,46 @@ fn connect(fixed: Option<SocketAddr>, bonjour: &net::Bonjour) -> Option<(String,
     }
     let addrs = match fixed {
         Some(a) => vec![a],
-        None => bonjour.addresses(),
+        None => {
+            let mut a = bonjour.addresses();
+            a.extend(last_ipad().filter(|l| !a.contains(l)));
+            a
+        }
     };
     for a in addrs {
         match net::connect_tcp(a) {
-            Ok(s) => return Some((format!("Wi-Fi ({a})"), s)),
+            Ok(s) => {
+                remember_ipad(a);
+                return Some((format!("Wi-Fi ({a})"), s));
+            }
             Err(e) => log::debug!("{a}: {e}"),
         }
     }
     None
+}
+
+fn last_ipad_path() -> Option<std::path::PathBuf> {
+    let base = std::env::var_os("APPDATA")
+        .or_else(|| std::env::var_os("XDG_CONFIG_HOME"))
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config"))
+        })?;
+    Some(base.join("inklink").join("last-ipad"))
+}
+
+/// Last address that worked, retried even when Bonjour has gone quiet.
+fn last_ipad() -> Option<SocketAddr> {
+    std::fs::read_to_string(last_ipad_path()?)
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
+}
+
+fn remember_ipad(addr: SocketAddr) {
+    if let Some(path) = last_ipad_path() {
+        let _ = std::fs::create_dir_all(path.parent().unwrap());
+        let _ = std::fs::write(path, addr.to_string());
+    }
 }
